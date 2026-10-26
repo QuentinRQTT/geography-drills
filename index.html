@@ -226,7 +226,7 @@ button.btn[disabled], button.next[disabled] { opacity: .4; cursor: default; }
 .vn-help{font-size:13px;color:var(--ink-soft)}
 .vn-map{display:block;width:100%;height:auto;max-height:68vh;touch-action:manipulation;cursor:pointer}
 .vn-map path.vnProvince{fill:var(--land);stroke:none;cursor:pointer;vector-effect:non-scaling-stroke}
-.vn-map path.vnProvince:hover{fill:var(--neighbor);stroke:none!important;outline:none!important}.vn-map path.vnProvince:focus,.vn-map path.vnProvince:focus-visible{outline:none;stroke:none!important}
+.vn-map path.vnProvince:hover{fill:var(--land);stroke:none!important;outline:none!important}.vn-map path.vnProvince:focus,.vn-map path.vnProvince:focus-visible{fill:var(--land);outline:none;stroke:none!important}
 .vn-map path.vnAnswer{fill:color-mix(in srgb,var(--answer) 18%,var(--land));stroke:var(--answer);stroke-width:2.2}
 .vn-map path.vnGuess{fill:color-mix(in srgb,var(--guess) 18%,var(--land));stroke:var(--guess);stroke-width:2.2}
 .vn-loading{padding:24px;text-align:center;color:var(--ink-soft)}
@@ -806,7 +806,7 @@ button.btn[disabled], button.next[disabled] { opacity: .4; cursor: default; }
       vnProjection.fitExtent([[26,20],[774,980]],{type:"FeatureCollection",features:feats});
       vnPath.projection(vnProjection);
       vnRoot.selectAll("*").remove();
-      vnRoot.selectAll("path.vnProvince").data(feats).join("path").attr("class","vnProvince").attr("d",vnPath).append("title").text(vnName);
+      vnRoot.selectAll("path.vnProvince").data(feats).join("path").attr("class","vnProvince").attr("d",vnPath);
       var local=null;try{local=JSON.parse(localStorage.getItem(VN_KEY)||"null");}catch(e){}
       vnState=vnValidState(local)?local:null;
       if(!vnState){vnState={v:1,label:"Vietnam provinces · 63 areas",deck:d3.shuffle(vnFeatures.map(vnId)),results:[],savedAt:Date.now()};vnPersistLocal();}
