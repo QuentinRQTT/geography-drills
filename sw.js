@@ -1,4 +1,4 @@
-const CACHE = "oblast-capitals-v1";
+const CACHE = "oblast-capitals-v2";
 const ASSETS = [
   "./",
   "./index.html",
