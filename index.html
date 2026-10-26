@@ -226,7 +226,7 @@ button.btn[disabled], button.next[disabled] { opacity: .4; cursor: default; }
 .vn-help{font-size:13px;color:var(--ink-soft)}
 .vn-map{display:block;width:100%;height:auto;max-height:68vh;touch-action:manipulation;cursor:pointer}
 .vn-map path.vnProvince{fill:var(--land);stroke:none;cursor:pointer;vector-effect:non-scaling-stroke}
-.vn-map path.vnProvince:hover{fill:var(--neighbor)}
+.vn-map path.vnProvince:hover{fill:var(--neighbor);stroke:none!important;outline:none!important}.vn-map path.vnProvince:focus,.vn-map path.vnProvince:focus-visible{outline:none;stroke:none!important}
 .vn-map path.vnAnswer{fill:color-mix(in srgb,var(--answer) 18%,var(--land));stroke:var(--answer);stroke-width:2.2}
 .vn-map path.vnGuess{fill:color-mix(in srgb,var(--guess) 18%,var(--land));stroke:var(--guess);stroke-width:2.2}
 .vn-loading{padding:24px;text-align:center;color:var(--ink-soft)}
@@ -750,16 +750,27 @@ button.btn[disabled], button.next[disabled] { opacity: .4; cursor: default; }
     }
     function vnLoadCurrent(){
       vnCur=vnById[vnState.deck[vnState.results.length]];vnAnswered=false;
-      vnSvg.classed("locked",false);vnSvg.selectAll("path.vnProvince").classed("vnAnswer",false).classed("vnGuess",false);
+      vnSvg.classed("locked",false);vnSvg.selectAll("path.vnProvince").classed("vnAnswer",false).classed("vnGuess",false);vnRoot.selectAll(".vn-distance-line,.vn-distance-pin").remove();
       $("vnTarget").textContent=vnName(vnCur);$("vnMsg").innerHTML='<div class="idle">Click the map area for <b>'+vnName(vnCur)+'</b>.</div>';
       $("vnNext").textContent="Next province →";$("vnNext").disabled=true;$("vnHint").style.visibility="visible";vnUpdateStats();
     }
     function vnGuess(feature){
       if(activeMap!=="vn"||vnMode!=="play"||vnAnswered||!vnCur||!feature)return;
-      var selected=vnId(feature),target=vnId(vnCur),correct=selected===target,pts=correct?100:0;vnAnswered=true;
-      vnState.results.push({n:target,selected:selected,correct:correct,pts:pts});vnPersist();
+      var selected=vnId(feature),target=vnId(vnCur),correct=selected===target;
+      var guessCenter=d3.geoCentroid(feature),answerCenter=d3.geoCentroid(vnCur);
+      var km=haversine(answerCenter[1],answerCenter[0],guessCenter[1],guessCenter[0]),pts=pointsFor(km);
+      vnAnswered=true;
+      vnState.results.push({n:target,selected:selected,correct:correct,km:km,glon:guessCenter[0],glat:guessCenter[1],alon:answerCenter[0],alat:answerCenter[1],pts:pts});vnPersist();
       vnSvg.selectAll("path.vnProvince").classed("vnAnswer",function(d){return vnId(d)===target;}).classed("vnGuess",function(d){return !correct&&vnId(d)===selected;});
-      $("vnMsg").innerHTML=correct?'<div class="verdict"><b>Correct!</b> +100 points · '+vnName(vnCur)+'</div>':'<div class="verdict"><b>Not quite.</b> The highlighted area is '+vnName(vnCur)+'.</div>';
+      vnRoot.selectAll(".vn-distance-line,.vn-distance-pin").remove();
+      var g=vnProjection(guessCenter),a=vnProjection(answerCenter);
+      if(g&&a){
+        vnRoot.append("line").attr("class","line vn-distance-line").attr("x1",g[0]).attr("y1",g[1]).attr("x2",a[0]).attr("y2",a[1]);
+        vnRoot.append("circle").attr("class","pin-guess vn-distance-pin").attr("cx",g[0]).attr("cy",g[1]).attr("r",5);
+        vnRoot.append("circle").attr("class","pin-answer vn-distance-pin").attr("cx",a[0]).attr("cy",a[1]).attr("r",5);
+      }
+      var verdict=correct?"<b>Exact province!</b> You clicked the right area.":"<b>"+(km<60?"Very close.":km<250?"Close.":km<800?"Right region.":km<2000?"Quite a way off.":"Far off.")+"</b> The target is "+vnName(vnCur)+".";
+      $("vnMsg").innerHTML='<div class="dist">'+fmt(km)+'<small>km between province centres</small></div><div class="verdict">'+verdict+' <b>+'+fmt(pts)+'</b> points · green = answer, red = your choice.</div>';
       $("vnNext").textContent=vnState.results.length>=vnState.deck.length?"See recap →":"Next province →";$("vnNext").disabled=false;$("vnHint").style.visibility="hidden";vnUpdateStats();
     }
     function vnAdvance(){if(activeMap!=="vn"||vnMode!=="play"||!vnAnswered)return;if(vnState.results.length>=vnState.deck.length)vnShowRecap();else vnLoadCurrent();}
