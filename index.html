@@ -714,8 +714,8 @@ button.btn[disabled], button.next[disabled] { opacity: .4; cursor: default; }
     var vnSvg = d3.select("#vnMap"), vnRoot = vnSvg.append("g"), vnPath = d3.geoPath();
     var vnFeatures = [], vnById = {}, vnState = null, vnCur = null, vnAnswered = false, vnMode = "play";
     var vnProjection = d3.geoMercator(), vnZoomRoot = vnRoot, vnDbRef = null, vnDbBusy = false, vnDbDirty = false;
-    function vnNormalizeName(s){return String(s||"").normalize("NFD").replace(/[\${ch}-\${ch}]/g,"").replace(/đ/g,"d").replace(/Đ/g,"D").toLowerCase().replace(/[^a-z0-9]/g,"");}
-    function vnPrettyName(s){return String(s||"").replace(/([A-ZÀ-Þ])/g," $1").replace(/-/g,"–").replace(/\${ch}+/g," ").trim();}
+    function vnNormalizeName(s){return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").replace(/Đ/g,"D").toLowerCase().replace(/[^a-z0-9]/g,"");}
+    function vnPrettyName(s){return String(s||"").replace(/([A-ZÀ-Þ])/g," $1").replace(/-/g,"–").replace(/\s+/g," ").trim();}
     function vnId(f){return f.properties.vnId || vnNormalizeName(f.properties.NAME_1);}
     function vnName(f){return f.properties.vnName || vnPrettyName(f.properties.NAME_1);}
     function vnPersistLocal(){try{vnState.savedAt=Date.now();localStorage.setItem(VN_KEY,JSON.stringify(vnState));}catch(e){}}
