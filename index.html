@@ -218,10 +218,29 @@ button.btn[disabled], button.next[disabled] { opacity: .4; cursor: default; }
   .target h1 { font-size: clamp(26px, 5vw, 34px); }
   svg.map { max-height: 48vh; }
 }
+
+/* Map switcher + Vietnam province drill */
+.switcher{max-width:1100px;margin:0 auto 12px;display:flex;gap:8px;flex-wrap:wrap}
+.switcher button{border:1px solid var(--rule);background:var(--panel);color:var(--ink);border-radius:999px;padding:9px 15px;font:600 13px var(--font-body);cursor:pointer}
+.switcher button[aria-pressed="true"]{background:var(--ink);color:var(--sea);border-color:var(--ink)}
+.vn-help{font-size:13px;color:var(--ink-soft)}
+.vn-map{display:block;width:100%;height:auto;max-height:68vh;touch-action:manipulation;cursor:pointer}
+.vn-map path.vnProvince{fill:var(--land);stroke:none;cursor:pointer;vector-effect:non-scaling-stroke}
+.vn-map path.vnProvince:hover{fill:var(--neighbor)}
+.vn-map path.vnAnswer{fill:color-mix(in srgb,var(--answer) 18%,var(--land));stroke:var(--answer);stroke-width:2.2}
+.vn-map path.vnGuess{fill:color-mix(in srgb,var(--guess) 18%,var(--land));stroke:var(--guess);stroke-width:2.2}
+.vn-loading{padding:24px;text-align:center;color:var(--ink-soft)}
+.vn-results{padding:12px 0 0}
+.vn-results ol{margin:10px 0 0;padding-left:22px;display:grid;gap:7px}
+.vn-results li{padding:8px 10px;border:1px solid var(--rule);border-radius:8px;background:var(--panel)}
+.vn-results li b{display:block}
+.vn-results li small{color:var(--ink-soft)}
+@media(max-width:600px){.switcher{margin-bottom:8px}.switcher button{flex:1;padding:10px 8px}.vn-map{max-height:62vh}}
 </style>
 </head>
 <body>
-<div class="app">
+<nav class="switcher" aria-label="Choose map"><button id="switchRu" aria-pressed="true">Russian capitals</button><button id="switchVn" aria-pressed="false">Vietnam provinces</button></nav>
+<div class="app" id="ruApp">
   <div class="top">
     <div class="prompt" aria-live="polite">
       <div class="eyebrow" id="eyebrow">Find this city</div>
@@ -256,6 +275,23 @@ button.btn[disabled], button.next[disabled] { opacity: .4; cursor: default; }
   </div>
 </div>
 
+<div class="app" id="vnApp" hidden>
+  <div class="top">
+    <div class="prompt" aria-live="polite"><div class="eyebrow" id="vnEyebrow">Vietnam · historical boundaries</div><div class="target"><h1 id="vnTarget">Loading map…</h1></div></div>
+    <div class="stats"><div class="stat"><b id="vnRound">0/64</b><span>Done</span></div><div class="stat"><b id="vnScore">0</b><span>Score</span></div><div class="stat"><b id="vnAccuracy">–</b><span>Accuracy</span></div></div>
+  </div>
+  <div class="bar" aria-hidden="true"><i id="vnBarFill"></i></div>
+  <div class="mapwrap">
+    <svg class="vn-map" id="vnMap" viewBox="0 0 800 1000" role="img" aria-label="Map of Vietnam provinces. Click the province you think is correct."></svg>
+    <div class="hint" id="vnHint">Choose the province area · boundaries are hidden until you answer</div>
+  </div>
+  <div class="result" id="vnResult">
+    <div class="msg" id="vnMsg"><div class="idle">Choose a province on the map.</div></div>
+    <button class="next" id="vnNext" disabled>Next province →</button>
+  </div>
+  <section class="recap" id="vnRecap" hidden aria-live="polite"></section>
+  <div class="mode"><span class="vn-help">Separate progress from Russian capitals. Historical set: 63 pre-2025 units, with Hà Tây added as a 64th target.</span><span class="sp"></span><button class="link" id="vnSeeRecap" hidden>See recap</button><button class="link" id="vnNewDrill">New drill</button></div>
+</div>
 
 <script src="d3.min.js"></script>
 <script>
@@ -669,6 +705,118 @@ button.btn[disabled], button.next[disabled] { opacity: .4; cursor: default; }
   if (saved) { state = saved; resumed = state.results.length > 0 && state.results.length < state.deck.length; start(); }
   else freshDeck();
   initRemote();
+
+  // ---------- independent Vietnam province drill ----------
+  (function initVietnamDrill() {
+    var VN_DATA_URL = "https://raw.githubusercontent.com/fresfrida/data-4-life/2430d3aebd9854744e1091e752551ef35d99fb30/3goods-map/data/vn_provinces.geojson";
+    var VN_KEY = "vnProvinces.drill.v1";
+    var vnApp = $("vnApp"), ruApp = $("ruApp"), activeMap = "ru";
+    var vnSvg = d3.select("#vnMap"), vnRoot = vnSvg.append("g"), vnPath = d3.geoPath();
+    var vnFeatures = [], vnById = {}, vnState = null, vnCur = null, vnAnswered = false, vnMode = "play";
+    var vnProjection = d3.geoMercator(), vnZoomRoot = vnRoot, vnDbRef = null, vnDbBusy = false, vnDbDirty = false;
+    var haTayId = "ha-tay-historical";
+    // Approximate historical Hà Tây overlay: it is deliberately borderless during the question.
+    // The base data has the 63-unit pre-2025 layout; Hà Tây is restored as a separate target.
+    var haTayFeature = {type:"Feature",properties:{NAME_1:"Ha Tay",vnId:haTayId,vnName:"Hà Tây"},geometry:{type:"Polygon",coordinates:[[[105.20,20.52],[105.28,20.76],[105.36,20.98],[105.52,21.16],[105.78,21.22],[105.98,21.10],[106.02,20.86],[105.90,20.63],[105.68,20.48],[105.42,20.45],[105.20,20.52]]]}};
+    function vnNormalizeName(s){return String(s||"").normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").replace(/đ/g,"d").replace(/Đ/g,"D").toLowerCase().replace(/[^a-z0-9]/g,"");}
+    function vnPrettyName(s){return String(s||"").replace(/([A-ZÀ-Þ])/g," $1").replace(/-/g,"–").replace(/\\s+/g," ").trim();}
+    function vnId(f){return f.properties.vnId || vnNormalizeName(f.properties.NAME_1);}
+    function vnName(f){return f.properties.vnName || vnPrettyName(f.properties.NAME_1);}
+    function vnPersistLocal(){try{vnState.savedAt=Date.now();localStorage.setItem(VN_KEY,JSON.stringify(vnState));}catch(e){}}
+    function vnValidState(st){return !!st&&st.v===1&&Array.isArray(st.deck)&&Array.isArray(st.results)&&st.deck.length>0&&st.results.length<=st.deck.length&&st.deck.every(function(n){return !!vnById[n];})&&st.results.every(function(r,i){return r&&r.n===st.deck[i]&&typeof r.correct==="boolean";});}
+    function vnSaveRemote(){
+      if(!vnDbRef)return;if(vnDbBusy){vnDbDirty=true;return;}vnDbBusy=true;vnDbDirty=false;var p;
+      try{p=vnDbRef.set(JSON.parse(JSON.stringify(vnState)));}catch(e){vnDbBusy=false;return;}
+      p.then(function(){},function(){}).then(function(){vnDbBusy=false;if(vnDbDirty)vnSaveRemote();});
+    }
+    function vnPersist(){vnPersistLocal();vnSaveRemote();}
+    function vnInitRemote(){
+      if(!window.claude||!window.claude.use)return;
+      Promise.all([window.claude.use("db"),window.claude.use("user")]).then(function(a){
+        if(!a[0]||!a[1])return;
+        return a[1].id().then(function(id){if(!id)return;vnDbRef=a[0].doc("data/users/"+id+"/drill-vietnam");
+          return vnDbRef.get().then(function(snap){if(!snap.exists){if(vnState.savedAt)vnSaveRemote();return;}
+            var remote=JSON.parse(JSON.stringify(snap.data()));
+            if(vnValidState(remote)&&remote.savedAt>(vnState.savedAt||0)){vnState=remote;vnPersistLocal();vnStart();}
+            else if(vnState.savedAt>(remote.savedAt||0))vnSaveRemote();
+          });
+        });
+      }).catch(function(){});
+    }
+    function vnUpdateStats(){
+      var n=vnState.results.length,N=vnState.deck.length,score=vnState.results.reduce(function(a,r){return a+r.pts;},0),correct=vnState.results.filter(function(r){return r.correct;}).length;
+      $("vnRound").textContent=n+"/"+N;$("vnScore").textContent=score.toLocaleString("en-US");$("vnAccuracy").textContent=n?Math.round(correct/n*100)+"%":"–";$("vnBarFill").style.width=(100*n/N)+"%";
+      $("vnSeeRecap").hidden=!(vnMode==="play"&&n>0);
+    }
+    function vnStart(){if(vnState.results.length>=vnState.deck.length)vnShowRecap();else vnShowPlay();}
+    function vnShowPlay(){
+      vnMode="play";$("vnRecap").hidden=true;$("vnResult").hidden=false;$("vnTarget").hidden=false;vnLoadCurrent();
+    }
+    function vnLoadCurrent(){
+      vnCur=vnById[vnState.deck[vnState.results.length]];vnAnswered=false;
+      vnSvg.classed("locked",false);vnSvg.selectAll("path.vnProvince").classed("vnAnswer",false).classed("vnGuess",false);
+      $("vnTarget").textContent=vnName(vnCur);$("vnMsg").innerHTML='<div class="idle">Click the map area for <b>'+vnName(vnCur)+'</b>.</div>';
+      $("vnNext").textContent="Next province →";$("vnNext").disabled=true;$("vnHint").style.visibility="visible";vnUpdateStats();
+    }
+    function vnGuess(feature){
+      if(activeMap!=="vn"||vnMode!=="play"||vnAnswered||!vnCur||!feature)return;
+      var selected=vnId(feature),target=vnId(vnCur),correct=selected===target,pts=correct?100:0;vnAnswered=true;
+      vnState.results.push({n:target,selected:selected,correct:correct,pts:pts});vnPersist();
+      vnSvg.selectAll("path.vnProvince").classed("vnAnswer",function(d){return vnId(d)===target;}).classed("vnGuess",function(d){return !correct&&vnId(d)===selected;});
+      $("vnMsg").innerHTML=correct?'<div class="verdict"><b>Correct!</b> +100 points · '+vnName(vnCur)+'</div>':'<div class="verdict"><b>Not quite.</b> The highlighted area is '+vnName(vnCur)+'.</div>';
+      $("vnNext").textContent=vnState.results.length>=vnState.deck.length?"See recap →":"Next province →";$("vnNext").disabled=false;$("vnHint").style.visibility="hidden";vnUpdateStats();
+    }
+    function vnAdvance(){if(activeMap!=="vn"||vnMode!=="play"||!vnAnswered)return;if(vnState.results.length>=vnState.deck.length)vnShowRecap();else vnLoadCurrent();}
+    function vnNewDrill(){
+      if(vnState&&vnState.results.length>0&&vnState.results.length<vnState.deck.length&&!window.confirm("Discard the unfinished Vietnam drill and start a new one?"))return;
+      vnState={v:1,label:"Vietnam historical provinces · 64 areas",deck:d3.shuffle(vnFeatures.map(vnId)),results:[],savedAt:Date.now()};vnPersist();vnStart();
+    }
+    function vnShowRecap(){
+      vnMode="recap";vnCur=null;vnAnswered=false;$("vnResult").hidden=true;$("vnRecap").hidden=false;$("vnHint").style.visibility="hidden";
+      var R=vnState.results,correct=R.filter(function(r){return r.correct;}).length,score=R.reduce(function(a,r){return a+r.pts;},0),done=R.length>=vnState.deck.length;
+      var rows=R.map(function(r){return '<li><b>'+vnName(vnById[r.n])+'</b><small>'+(r.correct?'Correct':'Missed'+(r.selected?' · clicked '+vnName(vnById[r.selected]):''))+'</small></li>';}).join("");
+      $("vnRecap").innerHTML='<div class="rhead"><div><div class="eyebrow">Vietnam · independent progress</div><h2>'+(done?'Recap':'Recap so far')+'</h2></div><div class="part">'+R.length+' / '+vnState.deck.length+'</div></div><div class="tiles"><div class="tile"><b>'+correct+'/'+R.length+'</b><span>Correct</span></div><div class="tile"><b>'+Math.round(correct/Math.max(1,R.length)*100)+'%</b><span>Accuracy</span></div><div class="tile"><b>'+score+'</b><span>Score</span></div></div><div class="acts">'+(done?'':'<button class="next" id="vnContinue">Continue drill</button>')+'<button class="next" id="vnRedo">Redo missed</button><button class="btn" id="vnNewFromRecap">New drill</button></div><div class="vn-results"><ol>'+rows+'</ol></div>';
+      var cont=$("vnContinue");if(cont)cont.addEventListener("click",vnShowPlay);
+      $("vnRedo").disabled=!R.some(function(r){return !r.correct;});
+      $("vnRedo").addEventListener("click",function(){var missed=R.filter(function(r){return !r.correct;}).map(function(r){return r.n;});if(!missed.length)return;vnState={v:1,label:"Vietnam · redo missed",deck:d3.shuffle(missed),results:[],savedAt:Date.now()};vnPersist();vnStart();});
+      $("vnNewFromRecap").addEventListener("click",vnNewDrill);vnUpdateStats();
+    }
+    function vnSwitch(which){
+      activeMap=which;var vn=which==="vn";ruApp.hidden=vn;vnApp.hidden=!vn;
+      $("switchRu").setAttribute("aria-pressed",String(!vn));$("switchVn").setAttribute("aria-pressed",String(vn));
+      if(vn&&vnState)vnUpdateStats();
+      if(!vn) { /* Russian state remains mounted and saved independently. */ }
+    }
+    $("switchRu").addEventListener("click",function(){vnSwitch("ru");});
+    $("switchVn").addEventListener("click",function(){vnSwitch("vn");});
+    $("vnNext").addEventListener("click",vnAdvance);
+    $("vnNewDrill").addEventListener("click",vnNewDrill);
+    $("vnSeeRecap").addEventListener("click",vnShowRecap);
+    vnSvg.on("click",function(event){var node=event.target;if(!node||!node.classList.contains("vnProvince"))return;vnGuess(d3.select(node).datum());});
+    function vnRenderMap(geo){
+      var feats=(geo.features||[]).map(function(f){f.properties=f.properties||{};f.properties.vnId=vnNormalizeName(f.properties.NAME_1||f.properties.name||"");f.properties.vnName=vnPrettyName(f.properties.NAME_1||f.properties.name||"");return f;});
+      var hanoi=feats.find(function(f){return vnNormalizeName(f.properties.NAME_1||"")==="hanoi";});
+      if(hanoi){hanoi.properties.vnId="hanoi";hanoi.properties.vnName="Hà Nội";}
+      haTayFeature.properties.vnId=haTayId;haTayFeature.properties.vnName="Hà Tây";
+      feats=feats.filter(function(f){return f.properties.vnId!=="hanoi";}).concat(hanoi?[hanoi]:[]).concat([haTayFeature]);
+      vnFeatures=feats;vnFeatures.forEach(function(f){vnById[vnId(f)]=f;});
+      // GADM's expanded post-2008 Hanoi is retained as a base target; Hà Tây is restored as a distinct overlay.
+      vnProjection.fitExtent([[26,20],[774,980]],{type:"FeatureCollection",features:feats});
+      vnPath.projection(vnProjection);
+      vnRoot.selectAll("*").remove();
+      vnRoot.selectAll("path.vnProvince").data(feats).join("path").attr("class","vnProvince").attr("d",vnPath).append("title").text(vnName);
+      var local=null;try{local=JSON.parse(localStorage.getItem(VN_KEY)||"null");}catch(e){}
+      vnState=vnValidState(local)?local:null;
+      if(!vnState){vnState={v:1,label:"Vietnam historical provinces · 64 areas",deck:d3.shuffle(vnFeatures.map(vnId)),results:[],savedAt:Date.now()};vnPersistLocal();}
+      $("vnEyebrow").textContent="Vietnam · historical provinces (pre-2008 target set)";
+      vnStart();vnInitRemote();
+    }
+    $("vnTarget").textContent="Loading map…";
+    fetch(VN_DATA_URL).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();}).then(vnRenderMap).catch(function(){
+      $("vnTarget").textContent="Map data unavailable";$("vnMsg").innerHTML='<div class="idle">The Vietnam boundary dataset could not be loaded. Connect to the internet and reload this page.</div>';
+    });
+  })();
+
 })();
 
 if ("serviceWorker" in navigator) {
