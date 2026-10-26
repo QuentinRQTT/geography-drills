@@ -2,12 +2,14 @@
 
 Static geography games hosted on GitHub Pages.
 
-## Current game
+## Oblast Capitals
 
-The Oblast Capitals PWA is prepared in the companion ZIP package. Extract the ZIP and upload the *contents* of `geography-drills-stage/` into the repository root, preserving `icons/`, `fonts/`, and `.github/workflows/`.
+The Oblast Capitals progressive web app is deployed from the repository root. Its HTML, D3.js dependency, manifest, service worker, icons, and fonts are stored in this repository.
 
-The Pages workflow deploys the repository root on pushes to `main`.
+## Deployment
 
-## Pages setup
+The GitHub Actions workflow at `.github/workflows/pages.yml` deploys the repository root to GitHub Pages on each push to `main`, or when manually run.
 
-In **Settings → Pages**, set **Build and deployment → Source** to **GitHub Actions** if it is not already selected.
+In **Settings → Pages**, set **Build and deployment → Source** to **GitHub Actions**.
+
+Live site: https://quentinrqtt.github.io/geography-drills/
