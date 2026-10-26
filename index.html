@@ -226,7 +226,7 @@ button.btn[disabled], button.next[disabled] { opacity: .4; cursor: default; }
 .vn-help{font-size:13px;color:var(--ink-soft)}
 .vn-map{display:block;width:100%;height:auto;max-height:68vh;touch-action:manipulation;cursor:pointer}
 .vn-map path.vnProvince{fill:var(--land);stroke:none;cursor:pointer;vector-effect:non-scaling-stroke}
-.vn-map path.vnProvince:hover{fill:var(--land);stroke:none!important;outline:none!important}.vn-map path.vnProvince:focus,.vn-map path.vnProvince:focus-visible{fill:var(--land);outline:none;stroke:none!important}
+.vn-map path.vnProvince:not(.vnAnswer):not(.vnGuess):hover{fill:var(--land);stroke:none!important;outline:none!important}.vn-map path.vnProvince:not(.vnAnswer):not(.vnGuess):focus,.vn-map path.vnProvince:not(.vnAnswer):not(.vnGuess):focus-visible{fill:var(--land);outline:none;stroke:none!important}
 .vn-map path.vnAnswer{fill:color-mix(in srgb,var(--answer) 18%,var(--land));stroke:var(--answer);stroke-width:2.2}
 .vn-map path.vnGuess{fill:color-mix(in srgb,var(--guess) 18%,var(--land));stroke:var(--guess);stroke-width:2.2}
 .vn-loading{padding:24px;text-align:center;color:var(--ink-soft)}
