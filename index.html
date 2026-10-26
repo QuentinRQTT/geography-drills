@@ -277,8 +277,8 @@ button.btn[disabled], button.next[disabled] { opacity: .4; cursor: default; }
 
 <div class="app" id="vnApp" hidden>
   <div class="top">
-    <div class="prompt" aria-live="polite"><div class="eyebrow" id="vnEyebrow">Vietnam · historical boundaries</div><div class="target"><h1 id="vnTarget">Loading map…</h1></div></div>
-    <div class="stats"><div class="stat"><b id="vnRound">0/64</b><span>Done</span></div><div class="stat"><b id="vnScore">0</b><span>Score</span></div><div class="stat"><b id="vnAccuracy">–</b><span>Accuracy</span></div></div>
+    <div class="prompt" aria-live="polite"><div class="eyebrow" id="vnEyebrow">Vietnam · provinces</div><div class="target"><h1 id="vnTarget">Loading map…</h1></div></div>
+    <div class="stats"><div class="stat"><b id="vnRound">0/63</b><span>Done</span></div><div class="stat"><b id="vnScore">0</b><span>Score</span></div><div class="stat"><b id="vnAccuracy">–</b><span>Accuracy</span></div></div>
   </div>
   <div class="bar" aria-hidden="true"><i id="vnBarFill"></i></div>
   <div class="mapwrap">
@@ -290,7 +290,7 @@ button.btn[disabled], button.next[disabled] { opacity: .4; cursor: default; }
     <button class="next" id="vnNext" disabled>Next province →</button>
   </div>
   <section class="recap" id="vnRecap" hidden aria-live="polite"></section>
-  <div class="mode"><span class="vn-help">Separate progress from Russian capitals. Historical set: 63 pre-2025 units, with Hà Tây added as a 64th target.</span><span class="sp"></span><button class="link" id="vnSeeRecap" hidden>See recap</button><button class="link" id="vnNewDrill">New drill</button></div>
+  <div class="mode"><span class="vn-help">Separate progress from Russian capitals. 63-area Vietnam map set.</span><span class="sp"></span><button class="link" id="vnSeeRecap" hidden>See recap</button><button class="link" id="vnNewDrill">New drill</button></div>
 </div>
 
 <script src="d3.min.js"></script>
@@ -708,16 +708,12 @@ button.btn[disabled], button.next[disabled] { opacity: .4; cursor: default; }
 
   // ---------- independent Vietnam province drill ----------
   (function initVietnamDrill() {
-    var VN_DATA_URL = "https://raw.githubusercontent.com/fresfrida/data-4-life/2430d3aebd9854744e1091e752551ef35d99fb30/3goods-map/data/vn_provinces.geojson";
+    var VN_DATA_URL = "https://raw.githubusercontent.com/fresfrida/data-4-life/main/3goods-map/data/vn_provinces.geojson";
     var VN_KEY = "vnProvinces.drill.v1";
     var vnApp = $("vnApp"), ruApp = $("ruApp"), activeMap = "ru";
     var vnSvg = d3.select("#vnMap"), vnRoot = vnSvg.append("g"), vnPath = d3.geoPath();
     var vnFeatures = [], vnById = {}, vnState = null, vnCur = null, vnAnswered = false, vnMode = "play";
     var vnProjection = d3.geoMercator(), vnZoomRoot = vnRoot, vnDbRef = null, vnDbBusy = false, vnDbDirty = false;
-    var haTayId = "ha-tay-historical";
-    // Approximate historical Hà Tây overlay: it is deliberately borderless during the question.
-    // The base data has the 63-unit pre-2025 layout; Hà Tây is restored as a separate target.
-    var haTayFeature = {type:"Feature",properties:{NAME_1:"Ha Tay",vnId:haTayId,vnName:"Hà Tây"},geometry:{type:"Polygon",coordinates:[[[105.20,20.52],[105.28,20.76],[105.36,20.98],[105.52,21.16],[105.78,21.22],[105.98,21.10],[106.02,20.86],[105.90,20.63],[105.68,20.48],[105.42,20.45],[105.20,20.52]]]}};
     function vnNormalizeName(s){return String(s||"").normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").replace(/đ/g,"d").replace(/Đ/g,"D").toLowerCase().replace(/[^a-z0-9]/g,"");}
     function vnPrettyName(s){return String(s||"").replace(/([A-ZÀ-Þ])/g," $1").replace(/-/g,"–").replace(/\\s+/g," ").trim();}
     function vnId(f){return f.properties.vnId || vnNormalizeName(f.properties.NAME_1);}
@@ -769,7 +765,7 @@ button.btn[disabled], button.next[disabled] { opacity: .4; cursor: default; }
     function vnAdvance(){if(activeMap!=="vn"||vnMode!=="play"||!vnAnswered)return;if(vnState.results.length>=vnState.deck.length)vnShowRecap();else vnLoadCurrent();}
     function vnNewDrill(){
       if(vnState&&vnState.results.length>0&&vnState.results.length<vnState.deck.length&&!window.confirm("Discard the unfinished Vietnam drill and start a new one?"))return;
-      vnState={v:1,label:"Vietnam historical provinces · 64 areas",deck:d3.shuffle(vnFeatures.map(vnId)),results:[],savedAt:Date.now()};vnPersist();vnStart();
+      vnState={v:1,label:"Vietnam provinces · 63 areas",deck:d3.shuffle(vnFeatures.map(vnId)),results:[],savedAt:Date.now()};vnPersist();vnStart();
     }
     function vnShowRecap(){
       vnMode="recap";vnCur=null;vnAnswered=false;$("vnResult").hidden=true;$("vnRecap").hidden=false;$("vnHint").style.visibility="hidden";
@@ -795,20 +791,15 @@ button.btn[disabled], button.next[disabled] { opacity: .4; cursor: default; }
     vnSvg.on("click",function(event){var node=event.target;if(!node||!node.classList.contains("vnProvince"))return;vnGuess(d3.select(node).datum());});
     function vnRenderMap(geo){
       var feats=(geo.features||[]).map(function(f){f.properties=f.properties||{};f.properties.vnId=vnNormalizeName(f.properties.NAME_1||f.properties.name||"");f.properties.vnName=vnPrettyName(f.properties.NAME_1||f.properties.name||"");return f;});
-      var hanoi=feats.find(function(f){return vnNormalizeName(f.properties.NAME_1||"")==="hanoi";});
-      if(hanoi){hanoi.properties.vnId="hanoi";hanoi.properties.vnName="Hà Nội";}
-      haTayFeature.properties.vnId=haTayId;haTayFeature.properties.vnName="Hà Tây";
-      feats=feats.filter(function(f){return f.properties.vnId!=="hanoi";}).concat(hanoi?[hanoi]:[]).concat([haTayFeature]);
       vnFeatures=feats;vnFeatures.forEach(function(f){vnById[vnId(f)]=f;});
-      // GADM's expanded post-2008 Hanoi is retained as a base target; Hà Tây is restored as a distinct overlay.
       vnProjection.fitExtent([[26,20],[774,980]],{type:"FeatureCollection",features:feats});
       vnPath.projection(vnProjection);
       vnRoot.selectAll("*").remove();
       vnRoot.selectAll("path.vnProvince").data(feats).join("path").attr("class","vnProvince").attr("d",vnPath).append("title").text(vnName);
       var local=null;try{local=JSON.parse(localStorage.getItem(VN_KEY)||"null");}catch(e){}
       vnState=vnValidState(local)?local:null;
-      if(!vnState){vnState={v:1,label:"Vietnam historical provinces · 64 areas",deck:d3.shuffle(vnFeatures.map(vnId)),results:[],savedAt:Date.now()};vnPersistLocal();}
-      $("vnEyebrow").textContent="Vietnam · historical provinces (pre-2008 target set)";
+      if(!vnState){vnState={v:1,label:"Vietnam provinces · 63 areas",deck:d3.shuffle(vnFeatures.map(vnId)),results:[],savedAt:Date.now()};vnPersistLocal();}
+      $("vnEyebrow").textContent="Vietnam · 63 province areas";
       vnStart();vnInitRemote();
     }
     $("vnTarget").textContent="Loading map…";
